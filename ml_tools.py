@@ -4,6 +4,10 @@ import pandas as pd
 from sklearn.metrics import classification_report, ConfusionMatrixDisplay, RocCurveDisplay
 from sklearn.metrics import roc_curve
 
+import matplotlib.pyplot as plt
+
+from shiny.types import FileInfo
+
 """Tools for ML training"""
 
 
@@ -32,23 +36,30 @@ def feature_select(df):
     return df
 
 
-def get_data(path_to_folder):
-    """Get the fata from the data file.
-    """
+def get_data(input_data):
+    """Get the fata from the data file."""
 
-    # Reading data
-    df = pd.read_csv(os.path.join(path_to_folder, 'bigtable.txt'), sep = '\t', index_col = 0, header = 0)
-
-    # Replacing NaNs
-    df = df.fillna(method='pad')
+    # Reading the feature set
+    f: list[FileInfo] = input_data.features()
+    df = pd.read_csv(f[0]["datapath"], sep=',' if f[0]["datapath"].endswith('.csv') else '\t', index_col=0).fillna(method='pad')
 
     # Reading negative-label lncRNAs
-    with open(os.path.join(path_to_folder, "negative.lncRNA.glist.xls"), "r") as f:
+    f: list[FileInfo] = input_data.neg_target()
+    with open(f[0]["datapath"], "r") as f:
         raw_negative_list = list(map(lambda x: x.strip(), f.readlines()))
-        negative_list = list(np.random.choice(raw_negative_list, 150))
+
     # Reading positive-label lncRNAs
-    with open(os.path.join(path_to_folder, "positive.lncRNA.glist.xls"), "r") as f:
-        positive_list = list(map(lambda x: x.strip(), f.readlines()))
+    f: list[FileInfo] = input_data.pos_target()
+    with open(f[0]["datapath"], "r") as f:
+        raw_positive_list = list(map(lambda x: x.strip(), f.readlines()))
+    
+    # Equalizing the samples from negative and positive sets
+    if len(raw_negative_list) < len(raw_positive_list):
+        positive_list = list(np.random.choice(raw_positive_list, 150))
+        negative_list = raw_negative_list
+    else:
+        negative_list = list(np.random.choice(raw_negative_list, 150))
+        positive_list = raw_positive_list
     
     # Selecting positive and negative samples
     positive_df = df.loc[positive_list,:]
@@ -89,16 +100,16 @@ def feature_importance_display(clf, model_id, X):
     return importances.plot(kind='bar')
 
 
-def run_ML_pipeline(report, model_id):
+def run_ML_pipeline(report, input_data):
     """
     Runs a certain pipeline on the given training data.
     """
 
-    path_to_folder = 'CRlncRC'
     seed = 42
     np.random.seed(seed)
 
-    train_X, train_y = get_data(path_to_folder)
+    model_id = input_data.ml_model()
+    train_X, train_y = get_data(input_data)
 
     if model_id == 'NB':
         from sklearn.naive_bayes import BernoulliNB
@@ -147,6 +158,36 @@ def run_ML_pipeline(report, model_id):
 
     else:
         raise NotImplementedError(f'The report={report} is not known!')
+
+
+def run_PCA(input_data):
+    """Run PCA on the given training data"""
+
+    seed = 42
+    np.random.seed(seed)
+
+    train_X, train_y = get_data(input_data)
+
+    from sklearn.decomposition import PCA
+    from sklearn.preprocessing import StandardScaler
+
+    X_train_scaled = StandardScaler().fit_transform(train_X)
+
+    pca = PCA().fit(X_train_scaled)
+    X_train_pca = pca.transform(X_train_scaled)
+
+    f, ax = plt.subplots(figsize=(15, 7))
+
+    scatter = ax.scatter(
+        X_train_pca[:, 0], X_train_pca[:, 1], 
+        c = train_y,
+    )
+    ax.set_xlabel('PC1')
+    ax.set_ylabel('PC2')
+    legend1 = ax.legend(*scatter.legend_elements(), title="Label")
+    ax.add_artist(legend1)
+
+    return ax
 
 
 if __name__ == '__main__':

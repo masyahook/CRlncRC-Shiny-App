@@ -3,7 +3,7 @@ from typing import List
 from shiny import *
 from shiny.types import NavSetArg
 
-from ml_tools import run_ML_pipeline
+from ml_tools import run_ML_pipeline, run_PCA
 
 
 def nav_controls() -> List[NavSetArg]:
@@ -13,10 +13,13 @@ def nav_controls() -> List[NavSetArg]:
 
             "Machine Learning",  # The title of the the current navigation bar
 
-            ui.panel_title('Run ML model training'),  # 
+            ui.panel_title('Run ML model training'), 
 
             ui.layout_sidebar(
                 ui.panel_sidebar(
+                    ui.input_file("features", "Upload the feature set (should be .csv/.tsv file, the first column corresponds to target set)", accept=[".csv", '.tsv'], multiple=False),
+                    ui.input_file("pos_target", "Upload the positive target set (should be a list of sample IDs formatted as a column)", multiple=False),
+                    ui.input_file("neg_target", "Upload the negative target set (should be a list of sample IDs formatted as a column)", multiple=False),
                     ui.input_select(
                         'ml_model', 
                         'Choose ML model to train', {
@@ -62,14 +65,42 @@ def nav_controls() -> List[NavSetArg]:
                                 width='1000px', 
                                 height='500px'
                             )
+                        ),
+                    )
+                )
+            )
+        ),
+        ui.nav(
+            "PCA",  
+
+            ui.panel_title('Principal Component Analysis'),
+
+            ui.layout_sidebar(
+                ui.panel_sidebar(
+                    ui.input_action_button(
+                    "run_pca", "Run analysis"
+                    )
+                ),
+                ui.panel_main(
+                    ui.div(
+                        {"class": "card mb-3"},
+                        ui.div(
+                            {"class": "card-body"},
+                            ui.h5({"class": "card-title mt-0"}, "Principal components"),
+                            ui.output_plot("pca", width='800px', height='500px')
                         )
                     )
                 )
-            ),
+            )
         ),
-        ui.nav("PCA",  ui.output_text("my_cool_text"),
-                     ui.output_text_verbatim("a_code_block")),
-        ui.nav('About')
+        ui.nav(
+                            'About',
+                            ui.h1("Running ML analysis based on input date"),
+                            ui.p(
+                """
+                This Shiny app provides the ability to train the model on the fly for the user."""
+            )
+                            )
     ]
 
 
@@ -90,25 +121,71 @@ def server(input: Inputs, output: Outputs, session: Session):
     @render.table
     @reactive.event(input.run)
     async def classification_metrics():
-        return run_ML_pipeline('classification_metrics', input.ml_model())
+
+        if input.features() is None:
+            return "Please upload the feature set (.csv or .tsv files)"
+        if input.pos_target() is None:
+            return "Please upload the positive target set"
+        if input.neg_target() is None:
+            return "Please upload the negative target set"
+
+        return run_ML_pipeline('classification_metrics', input)
 
     @output
     @render.plot
     @reactive.event(input.run)
     async def confusion_matrix():
-        return run_ML_pipeline('confusion_matrix', input.ml_model())
+
+        if input.features() is None:
+            return "Please upload the feature set (.csv or .tsv files)"
+        if input.pos_target() is None:
+            return "Please upload the positive target set"
+        if input.neg_target() is None:
+            return "Please upload the negative target set"
+
+        return run_ML_pipeline('confusion_matrix', input)
 
     @output
     @render.plot
     @reactive.event(input.run)
     async def roc_auc_curve():
-        return run_ML_pipeline('roc_auc_curve', input.ml_model())
+
+        if input.features() is None:
+            return "Please upload the feature set (.csv or .tsv files)"
+        if input.pos_target() is None:
+            return "Please upload the positive target set"
+        if input.neg_target() is None:
+            return "Please upload the negative target set"
+
+        return run_ML_pipeline('roc_auc_curve', input)
 
     @output
     @render.plot
     @reactive.event(input.run)
     async def feature_importance():
-        return run_ML_pipeline('feature_importance', input.ml_model())
+
+        if input.features() is None:
+            return "Please upload the feature set (.csv or .tsv files)"
+        if input.pos_target() is None:
+            return "Please upload the positive target set"
+        if input.neg_target() is None:
+            return "Please upload the negative target set"
+
+        return run_ML_pipeline('feature_importance', input)
+
+    @output
+    @render.plot
+    @reactive.event(input.run_pca)
+    async def pca():
+
+        if input.features() is None:
+            return "Please upload the feature set (.csv or .tsv files)"
+        if input.pos_target() is None:
+            return "Please upload the positive target set"
+        if input.neg_target() is None:
+            return "Please upload the negative target set"
+
+        return run_PCA(input)
 
 
 app = App(app_ui, server)
